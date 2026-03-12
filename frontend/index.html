@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LAPS Self-Service Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #0c0e1a;
+            --bg-secondary: #111328;
+            --indigo-500: #6366f1;
+            --indigo-400: #818cf8;
+            --indigo-300: #a5b4fc;
+            --indigo-200: #c7d2fe;
+            --indigo-100: #e0e7ff;
+            --green-400: #34d399;
+            --red-400: #fb7185;
+            --amber-400: #fbbf24;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(170deg, var(--bg-primary) 0%, var(--bg-secondary) 40%, #0f1120 100%);
+            font-family: 'Outfit', 'Segoe UI', system-ui, sans-serif;
+            color: var(--indigo-200);
+            position: relative;
+            overflow-x: hidden;
+        }
+
+        /* Ambient background */
+        .ambient { position: fixed; inset: 0; pointer-events: none; z-index: 0; }
+        .ambient .orb1 { position: absolute; top: -20%; right: -10%; width: 600px; height: 600px; border-radius: 50%; background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%); filter: blur(80px); }
+        .ambient .orb2 { position: absolute; bottom: -10%; left: -5%; width: 500px; height: 500px; border-radius: 50%; background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%); filter: blur(60px); }
+
+        /* Header */
+        header {
+            position: relative; z-index: 10;
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 32px;
+            border-bottom: 1px solid rgba(99,102,241,0.1);
+            backdrop-filter: blur(12px);
+            background: rgba(12,14,26,0.6);
+        }
+        .brand { display: flex; align-items: center; gap: 14px; }
+        .brand-icon {
+            width: 36px; height: 36px; border-radius: 10px;
+            background: linear-gradient(135deg, #6366f1, #3b82f6);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: 700; color: #fff;
+            box-shadow: 0 0 20px rgba(99,102,241,0.3);
+        }
+        .brand-name { font-size: 16px; font-weight: 600; color: var(--indigo-100); letter-spacing: -0.01em; }
+        .brand-sub { font-size: 11px; color: var(--indigo-500); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; }
+
+        .user-info { display: flex; align-items: center; gap: 16px; }
+        .user-info .name { font-size: 13px; font-weight: 500; color: var(--indigo-200); text-align: right; }
+        .user-info .email { font-size: 11px; color: rgba(99,102,241,0.5); text-align: right; }
+
+        .btn-signout {
+            background: rgba(251,113,133,0.1); border: 1px solid rgba(251,113,133,0.2);
+            border-radius: 8px; color: var(--red-400); padding: 8px 14px; cursor: pointer;
+            font-family: inherit; font-size: 12px; font-weight: 500; transition: all 0.2s;
+        }
+        .btn-signout:hover { background: rgba(251,113,133,0.2); }
+
+        /* Main */
+        main { position: relative; z-index: 10; max-width: 720px; margin: 0 auto; padding: 48px 24px; }
+
+        /* Login screen */
+        .login-screen { text-align: center; padding-top: 80px; animation: fadeUp 0.5s ease; }
+        .login-screen .icon { font-size: 42px; margin-bottom: 12px; }
+        .login-screen h1 { font-size: 28px; font-weight: 700; color: var(--indigo-100); margin-bottom: 8px; letter-spacing: -0.02em; }
+        .login-screen p { font-size: 14px; color: rgba(99,102,241,0.5); margin-bottom: 40px; max-width: 400px; margin-left: auto; margin-right: auto; }
+
+        .btn-signin {
+            background: linear-gradient(135deg, #4f46e5, #6366f1);
+            border: none; border-radius: 12px; color: #fff;
+            padding: 16px 40px; font-size: 15px; font-weight: 600;
+            font-family: inherit; cursor: pointer;
+            box-shadow: 0 4px 24px rgba(99,102,241,0.3);
+            transition: all 0.3s; display: inline-flex; align-items: center; gap: 10px;
+        }
+        .btn-signin:hover { transform: translateY(-1px); box-shadow: 0 6px 32px rgba(99,102,241,0.4); }
+        .btn-signin:disabled { opacity: 0.6; cursor: default; transform: none; box-shadow: none; }
+
+        .secured-note { margin-top: 24px; font-size: 11px; color: #4b5563; }
+
+        /* Device cards */
+        .section-title { font-size: 22px; font-weight: 600; color: var(--indigo-100); margin-bottom: 6px; letter-spacing: -0.01em; }
+        .section-sub { font-size: 13px; color: rgba(99,102,241,0.5); margin-bottom: 32px; }
+
+        .device-card {
+            background: rgba(99,102,241,0.04);
+            border: 1px solid rgba(99,102,241,0.1);
+            border-radius: 14px; padding: 20px 24px;
+            transition: all 0.2s; cursor: pointer;
+            margin-bottom: 12px;
+        }
+        .device-card:hover {
+            background: rgba(99,102,241,0.08);
+            border-color: rgba(99,102,241,0.25);
+            transform: translateY(-1px);
+        }
+        .device-top { display: flex; justify-content: space-between; align-items: flex-start; }
+        .device-name-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .device-name {
+            font-size: 16px; font-weight: 600; color: var(--indigo-100);
+            font-family: 'JetBrains Mono', monospace; letter-spacing: 0.02em;
+        }
+        .badge-compliant { background: rgba(52,211,153,0.12); color: var(--green-400); padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+        .badge-noncompliant { background: rgba(251,113,133,0.12); color: var(--red-400); padding: 3px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+        .device-meta { display: flex; gap: 20px; font-size: 12px; color: rgba(99,102,241,0.5); }
+        .device-meta span:not(:last-child)::after { content: '•'; margin-left: 20px; }
+        .get-pw-btn {
+            color: var(--indigo-500); font-size: 12px; font-weight: 500;
+            background: rgba(99,102,241,0.1); border-radius: 8px;
+            padding: 8px 14px; white-space: nowrap; border: none;
+            font-family: inherit; cursor: pointer; transition: all 0.2s;
+        }
+        .get-pw-btn:hover { background: rgba(99,102,241,0.2); }
+
+        /* Password result */
+        .result-card {
+            background: rgba(99,102,241,0.04);
+            border: 1px solid rgba(99,102,241,0.12);
+            border-radius: 16px; padding: 28px;
+            animation: fadeUp 0.4s ease;
+        }
+        .result-header { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        .result-header .title { font-size: 18px; font-weight: 600; color: var(--indigo-100); }
+        .result-header .subtitle { font-size: 13px; color: rgba(99,102,241,0.5); font-family: 'JetBrains Mono', monospace; }
+
+        .pw-box {
+            background: rgba(0,0,0,0.2); border-radius: 12px; padding: 20px; margin-bottom: 20px;
+        }
+        .pw-label { font-size: 11px; color: rgba(99,102,241,0.5); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 8px; }
+        .pw-row { display: flex; align-items: center; gap: 12px; }
+        .pw-value {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 18px; letter-spacing: 2px;
+            background: rgba(99,102,241,0.08);
+            border: 1px solid rgba(99,102,241,0.2);
+            border-radius: 8px; padding: 12px 18px;
+            flex: 1; transition: all 0.3s;
+        }
+        .pw-value.hidden { color: transparent; text-shadow: 0 0 12px rgba(99,102,241,0.6); user-select: none; }
+        .pw-value.visible { color: var(--indigo-100); }
+
+        .pw-btn {
+            background: rgba(99,102,241,0.15); border: 1px solid rgba(99,102,241,0.3);
+            border-radius: 8px; color: var(--indigo-300);
+            padding: 12px 16px; cursor: pointer; font-size: 14px; transition: all 0.2s;
+        }
+        .pw-btn:hover { background: rgba(99,102,241,0.25); }
+        .pw-btn.copied { background: rgba(52,211,153,0.2); border-color: rgba(52,211,153,0.4); color: var(--green-400); }
+
+        .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px; }
+        .detail-cell { background: rgba(99,102,241,0.04); border-radius: 10px; padding: 14px; }
+        .detail-label { color: rgba(99,102,241,0.38); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-size: 10px; font-weight: 600; }
+        .detail-value { color: var(--indigo-200); font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+
+        .warning-box {
+            margin-top: 20px; padding: 14px;
+            background: rgba(251,191,36,0.06); border: 1px solid rgba(251,191,36,0.15);
+            border-radius: 10px; font-size: 12px; color: var(--amber-400);
+            display: flex; align-items: flex-start; gap: 10px;
+        }
+        .warning-box .warn-title { font-weight: 600; margin-bottom: 2px; }
+
+        .btn-back {
+            background: none; border: none; color: var(--indigo-500); cursor: pointer;
+            font-family: inherit; font-size: 13px; font-weight: 500; padding: 0; margin-bottom: 28px;
+        }
+
+        .error-box {
+            background: rgba(251,113,133,0.08); border: 1px solid rgba(251,113,133,0.2);
+            border-radius: 10px; padding: 14px 18px; margin-bottom: 20px;
+            font-size: 13px; color: var(--red-400);
+        }
+
+        .empty-state { text-align: center; padding: 60px 20px; color: #4b5563; font-size: 14px; }
+        .loading-state { text-align: center; padding: 60px 20px; }
+
+        .spinner {
+            display: inline-block; width: 18px; height: 18px;
+            border: 2px solid rgba(99,102,241,0.2); border-top: 2px solid var(--indigo-400);
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+
+        footer {
+            position: relative; z-index: 10;
+            text-align: center; padding: 20px;
+            font-size: 11px; color: rgba(99,102,241,0.25);
+            border-top: 1px solid rgba(99,102,241,0.05);
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
+
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+
+<div class="ambient">
+    <div class="orb1"></div>
+    <div class="orb2"></div>
+</div>
+
+<!-- Header -->
+<header>
+    <div class="brand">
+        <div class="brand-icon">🔑</div>
+        <div>
+            <div class="brand-name">LAPS Self-Service</div>
+            <div class="brand-sub">Local Admin Password Retrieval</div>
+        </div>
+    </div>
+    <div id="userSection" class="user-info hidden">
+        <div>
+            <div class="name" id="userName"></div>
+            <div class="email" id="userEmail"></div>
+        </div>
+        <button class="btn-signout" onclick="signOut()">Sign out</button>
+    </div>
+</header>
+
+<main>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="login-screen">
+        <div class="icon">🔐</div>
+        <h1>LAPS Self-Service Portal</h1>
+        <p>Retrieve the local administrator password for devices where you are the primary user.</p>
+        <button class="btn-signin" id="signinBtn" onclick="signIn()">Sign in with Microsoft →</button>
+        <div class="secured-note">Secured with Microsoft Entra ID</div>
+    </div>
+
+    <!-- Devices Screen -->
+    <div id="devicesScreen" class="hidden">
+        <h2 class="section-title">Your Devices</h2>
+        <p class="section-sub">Showing devices where you are the Intune primary user. Select a device to retrieve its LAPS password.</p>
+        <div id="errorBox" class="error-box hidden"></div>
+        <div id="devicesList"></div>
+        <div id="devicesLoading" class="loading-state hidden">
+            <div class="spinner"></div>
+            <div style="margin-top:12px;color:rgba(99,102,241,0.5);font-size:13px;">Loading your devices...</div>
+        </div>
+        <div id="devicesEmpty" class="empty-state hidden">No devices found where you are the primary user.</div>
+    </div>
+
+    <!-- Password Screen -->
+    <div id="passwordScreen" class="hidden">
+        <button class="btn-back" onclick="showDevices()">← Back to devices</button>
+        <div id="passwordLoading" class="loading-state hidden">
+            <div class="spinner"></div>
+            <div style="margin-top:12px;color:rgba(99,102,241,0.5);font-size:13px;">Retrieving LAPS password...</div>
+        </div>
+        <div id="passwordResult" class="hidden"></div>
+    </div>
+</main>
+
+<footer>LAPS Self-Service Portal • Powered by Microsoft Graph API</footer>
+
+<script>
+    // ========================
+    //  CONFIGURATION — UPDATE THESE
+    // ========================
+    const MSAL_CONFIG = {
+        auth: {
+            clientId: "f69c45ce-5c90-4ac5-86af-33b87839443d",   // App Registration for the SPA
+            authority: "https://login.microsoftonline.com/70d23dbd-4cc6-45de-b09e-e570129481bd",
+            redirectUri: window.location.origin,
+        },
+        cache: {
+            cacheLocation: "sessionStorage",
+            storeAuthStateInCookie: false,
+        },
+    };
+
+    // Your Azure Function API base URL
+    const API_BASE = "/api";   // Relative if using Static Web Apps linked Functions
+    // const API_BASE = "https://<your-function-app>.azurewebsites.net/api"; // Or absolute URL
+
+    // Scopes: The SPA requests an access token for your backend API
+    // Option A: Use the backend app's Application ID URI (recommended)
+    const LOGIN_SCOPES = { scopes: ["api://28318d77-7056-40c1-a659-e9e51a4f65a1/access_as_user"] };
+    // Option B: If not using a custom scope, just request the user's profile
+    // const LOGIN_SCOPES = { scopes: ["User.Read"] };
+
+    // ========================
+    //  MSAL SETUP
+    // ========================
+    const msalInstance = new msal.PublicClientApplication(MSAL_CONFIG);
+
+    let currentAccount = null;
+    let accessToken = null;
+
+    // Check if returning from a redirect
+    msalInstance.handleRedirectPromise().then(handleResponse).catch(console.error);
+
+    function handleResponse(response) {
+        if (response) {
+            currentAccount = response.account;
+            accessToken = response.accessToken;
+            onAuthenticated();
+        } else {
+            const accounts = msalInstance.getAllAccounts();
+            if (accounts.length > 0) {
+                currentAccount = accounts[0];
+                acquireTokenSilent();
+            }
+        }
+    }
+
+    async function acquireTokenSilent() {
+        try {
+            const response = await msalInstance.acquireTokenSilent({
+                ...LOGIN_SCOPES,
+                account: currentAccount,
+            });
+            accessToken = response.accessToken;
+            onAuthenticated();
+        } catch (error) {
+            console.warn("Silent token acquisition failed, user needs to sign in", error);
+        }
+    }
+
+    async function signIn() {
+        const btn = document.getElementById("signinBtn");
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner"></span> Authenticating...';
+        try {
+            await msalInstance.loginRedirect(LOGIN_SCOPES);
+        } catch (error) {
+            console.error("Login error:", error);
+            btn.disabled = false;
+            btn.textContent = "Sign in with Microsoft →";
+        }
+    }
+
+    function signOut() {
+        msalInstance.logoutRedirect({ postLogoutRedirectUri: window.location.origin });
+    }
+
+    function onAuthenticated() {
+        document.getElementById("loginScreen").classList.add("hidden");
+        document.getElementById("userSection").classList.remove("hidden");
+        document.getElementById("userName").textContent = currentAccount.name || "User";
+        document.getElementById("userEmail").textContent = currentAccount.username;
+        showDevices();
+    }
+
+    // ========================
+    //  API CALLS
+    // ========================
+    async function getToken() {
+        try {
+            const response = await msalInstance.acquireTokenSilent({
+                ...LOGIN_SCOPES,
+                account: currentAccount,
+            });
+            return response.accessToken;
+        } catch (error) {
+            // Fall back to interactive
+            const response = await msalInstance.acquireTokenPopup(LOGIN_SCOPES);
+            return response.accessToken;
+        }
+    }
+
+    async function apiCall(endpoint) {
+        const token = await getToken();
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            headers: { "Authorization": `Bearer ${token}` },
+        });
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ error: response.statusText }));
+            throw new Error(err.error || `HTTP ${response.status}`);
+        }
+        return response.json();
+    }
+
+    // ========================
+    //  UI LOGIC
+    // ========================
+    async function showDevices() {
+        document.getElementById("devicesScreen").classList.remove("hidden");
+        document.getElementById("passwordScreen").classList.add("hidden");
+        document.getElementById("devicesLoading").classList.remove("hidden");
+        document.getElementById("devicesList").innerHTML = "";
+        document.getElementById("devicesEmpty").classList.add("hidden");
+        document.getElementById("errorBox").classList.add("hidden");
+
+        try {
+            const data = await apiCall("/devices");
+            document.getElementById("devicesLoading").classList.add("hidden");
+
+            if (!data.devices || data.devices.length === 0) {
+                document.getElementById("devicesEmpty").classList.remove("hidden");
+                return;
+            }
+
+            const container = document.getElementById("devicesList");
+            data.devices.forEach((device, i) => {
+                const card = document.createElement("div");
+                card.className = "device-card";
+                card.style.animation = `fadeUp ${0.3 + i * 0.1}s ease`;
+                card.onclick = () => requestPassword(device);
+
+                const badgeClass = device.complianceState === "compliant" ? "badge-compliant" : "badge-noncompliant";
+                const badgeLabel = device.complianceState === "compliant" ? "Compliant" : "Non-compliant";
+                const syncDate = new Date(device.lastSync).toLocaleDateString("en-IE", {
+                    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+                });
+
+                card.innerHTML = `
+                    <div class="device-top">
+                        <div>
+                            <div class="device-name-row">
+                                <span style="font-size:18px">💻</span>
+                                <span class="device-name">${escHtml(device.deviceName)}</span>
+                                <span class="${badgeClass}">${badgeLabel}</span>
+                            </div>
+                            <div class="device-meta">
+                                <span>${escHtml(device.model || 'Unknown model')}</span>
+                                <span>${escHtml(device.os || 'Windows')}</span>
+                                <span>Last sync: ${syncDate}</span>
+                            </div>
+                        </div>
+                        <button class="get-pw-btn">Get Password →</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        } catch (error) {
+            document.getElementById("devicesLoading").classList.add("hidden");
+            showError(error.message);
+        }
+    }
+
+    async function requestPassword(device) {
+        document.getElementById("devicesScreen").classList.add("hidden");
+        document.getElementById("passwordScreen").classList.remove("hidden");
+        document.getElementById("passwordLoading").classList.remove("hidden");
+        document.getElementById("passwordResult").classList.add("hidden");
+
+        try {
+            const data = await apiCall(`/devices/${device.id}/laps`);
+            document.getElementById("passwordLoading").classList.add("hidden");
+
+            const resultDiv = document.getElementById("passwordResult");
+            resultDiv.classList.remove("hidden");
+
+            const backupDate = data.backupDateTime
+                ? new Date(data.backupDateTime).toLocaleDateString("en-IE", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })
+                : "N/A";
+
+            resultDiv.innerHTML = `
+                <div class="result-card">
+                    <div class="result-header">
+                        <span style="font-size:22px">🔑</span>
+                        <div>
+                            <div class="title">LAPS Password Retrieved</div>
+                            <div class="subtitle">${escHtml(data.deviceName || device.deviceName)}</div>
+                        </div>
+                    </div>
+                    <div class="pw-box">
+                        <div class="pw-label">Local Administrator Password</div>
+                        <div class="pw-row">
+                            <div class="pw-value hidden" id="pwDisplay">${escHtml(data.password)}</div>
+                            <button class="pw-btn" onclick="togglePw()" id="toggleBtn" title="Show password">👁️</button>
+                            <button class="pw-btn" onclick="copyPw('${escAttr(data.password)}')" id="copyBtn" title="Copy to clipboard">📋</button>
+                        </div>
+                    </div>
+                    <div class="detail-grid">
+                        <div class="detail-cell">
+                            <div class="detail-label">Account Name</div>
+                            <div class="detail-value">${escHtml(data.accountName || '.\\Administrator')}</div>
+                        </div>
+                        <div class="detail-cell">
+                            <div class="detail-label">Password Backed Up</div>
+                            <div class="detail-value">${backupDate}</div>
+                        </div>
+                        <div class="detail-cell">
+                            <div class="detail-label">Device Model</div>
+                            <div class="detail-value">${escHtml(device.model || 'N/A')}</div>
+                        </div>
+                        <div class="detail-cell">
+                            <div class="detail-label">Compliance</div>
+                            <div><span class="${device.complianceState === 'compliant' ? 'badge-compliant' : 'badge-noncompliant'}">${device.complianceState === 'compliant' ? 'Compliant' : 'Non-compliant'}</span></div>
+                        </div>
+                    </div>
+                    <div class="warning-box">
+                        <span style="font-size:16px">⚠️</span>
+                        <div>
+                            <div class="warn-title">Security Notice</div>
+                            This retrieval has been logged. The password will rotate automatically per your organisation's LAPS policy.
+                        </div>
+                    </div>
+                </div>
+            `;
+        } catch (error) {
+            document.getElementById("passwordLoading").classList.add("hidden");
+            const resultDiv = document.getElementById("passwordResult");
+            resultDiv.classList.remove("hidden");
+            resultDiv.innerHTML = `<div class="error-box">${escHtml(error.message)}</div>
+                <button class="btn-back" onclick="showDevices()">← Back to devices</button>`;
+        }
+    }
+
+    function togglePw() {
+        const el = document.getElementById("pwDisplay");
+        const btn = document.getElementById("toggleBtn");
+        if (el.classList.contains("hidden")) {
+            el.classList.remove("hidden");
+            el.classList.add("visible");
+            btn.textContent = "🙈";
+            btn.title = "Hide password";
+        } else {
+            el.classList.add("hidden");
+            el.classList.remove("visible");
+            btn.textContent = "👁️";
+            btn.title = "Show password";
+        }
+    }
+
+    function copyPw(pw) {
+        navigator.clipboard.writeText(pw);
+        const btn = document.getElementById("copyBtn");
+        btn.classList.add("copied");
+        btn.textContent = "✓";
+        setTimeout(() => { btn.classList.remove("copied"); btn.textContent = "📋"; }, 2000);
+    }
+
+    function showError(msg) {
+        const box = document.getElementById("errorBox");
+        box.textContent = msg;
+        box.classList.remove("hidden");
+    }
+
+    function escHtml(str) {
+        const div = document.createElement("div");
+        div.textContent = str || "";
+        return div.innerHTML;
+    }
+
+    function escAttr(str) {
+        return (str || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    }
+</script>
+</body>
+</html>
