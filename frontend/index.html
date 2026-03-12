@@ -405,14 +405,24 @@
 
             const container = document.getElementById("devicesList");
             data.devices.forEach((device, i) => {
+                // Normalize property names (PowerShell may capitalize keys)
+                const dev = {
+                    id: device.id || device.Id,
+                    azureAdDeviceId: device.azureAdDeviceId || device.AzureAdDeviceId,
+                    deviceName: device.deviceName || device.DeviceName,
+                    model: device.model || device.Model,
+                    os: device.os || device.Os,
+                    complianceState: device.complianceState || device.ComplianceState,
+                    lastSync: device.lastSync || device.LastSync,
+                };
                 const card = document.createElement("div");
                 card.className = "device-card";
                 card.style.animation = `fadeUp ${0.3 + i * 0.1}s ease`;
-                card.onclick = () => requestPassword(device);
+                card.onclick = () => requestPassword(dev);
 
-                const badgeClass = device.complianceState === "compliant" ? "badge-compliant" : "badge-noncompliant";
-                const badgeLabel = device.complianceState === "compliant" ? "Compliant" : "Non-compliant";
-                const syncDate = new Date(device.lastSync).toLocaleDateString("en-IE", {
+                const badgeClass = dev.complianceState === "compliant" ? "badge-compliant" : "badge-noncompliant";
+                const badgeLabel = dev.complianceState === "compliant" ? "Compliant" : "Non-compliant";
+                const syncDate = new Date(dev.lastSync).toLocaleDateString("en-IE", {
                     day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
                 });
 
@@ -421,12 +431,12 @@
                         <div>
                             <div class="device-name-row">
                                 <span style="font-size:18px">💻</span>
-                                <span class="device-name">${escHtml(device.deviceName)}</span>
+                                <span class="device-name">${escHtml(dev.deviceName)}</span>
                                 <span class="${badgeClass}">${badgeLabel}</span>
                             </div>
                             <div class="device-meta">
-                                <span>${escHtml(device.model || 'Unknown model')}</span>
-                                <span>${escHtml(device.os || 'Windows')}</span>
+                                <span>${escHtml(dev.model || 'Unknown model')}</span>
+                                <span>${escHtml(dev.os || 'Windows')}</span>
                                 <span>Last sync: ${syncDate}</span>
                             </div>
                         </div>
