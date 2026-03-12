@@ -282,8 +282,8 @@
     };
 
     // Your Azure Function API base URL
-    const API_BASE = "/api";   // Relative if using Static Web Apps linked Functions
-    // const API_BASE = "https://<your-function-app>.azurewebsites.net/api"; // Or absolute URL
+    //const API_BASE = "/api";   // Relative if using Static Web Apps linked Functions
+    const API_BASE = "https://ambitious-water-046727103.1.azurestaticapps.net/api"; // Or absolute URL
 
     // Scopes: The SPA requests an access token for your backend API
     // Option A: Use the backend app's Application ID URI (recommended)
@@ -298,9 +298,22 @@
 
     let currentAccount = null;
     let accessToken = null;
+    let msalReady = false;
 
-    // Check if returning from a redirect
-    msalInstance.handleRedirectPromise().then(handleResponse).catch(console.error);
+    // MSAL v2.x requires initialize() before any other calls
+    (async function startApp() {
+        try {
+            await msalInstance.initialize();
+            msalReady = true;
+            console.log("MSAL initialized successfully");
+
+            // Check if returning from a redirect
+            const response = await msalInstance.handleRedirectPromise();
+            handleResponse(response);
+        } catch (error) {
+            console.error("MSAL initialization error:", error);
+        }
+    })();
 
     function handleResponse(response) {
         if (response) {
@@ -330,6 +343,10 @@
     }
 
     async function signIn() {
+        if (!msalReady) {
+            console.error("MSAL not yet initialized, please wait...");
+            return;
+        }
         const btn = document.getElementById("signinBtn");
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner"></span> Authenticating...';
